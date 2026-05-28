@@ -42,7 +42,7 @@ BEGIN
     -- Apenas considera matrículas com ambas as notas preenchidas
     SELECT ROUND(AVG((ma.nota1 + ma.nota2) / 2.0)::NUMERIC, 2)
     INTO v_media
-    FROM matricula_aluno ma
+    FROM public.matricula_aluno ma
     WHERE ma.aluno_id = p_aluno_id
       AND ma.nota1 IS NOT NULL
       AND ma.nota2 IS NOT NULL;
@@ -65,7 +65,7 @@ Exemplo: SELECT fn_calcular_media_aluno(1);';
 CREATE OR REPLACE FUNCTION fn_desvio_padrao_notas(p_disciplina_id BIGINT)
 RETURNS NUMERIC(5,2)
 LANGUAGE plpgsql
-STABLE
+STABLE SET search_path TO public
 AS $$
 DECLARE
     v_desvio NUMERIC(5,2);
@@ -74,7 +74,7 @@ BEGIN
     -- Usa a média individual de cada aluno (nota1+nota2)/2 como base
     SELECT ROUND(STDDEV_POP((ma.nota1 + ma.nota2) / 2.0)::NUMERIC, 2)
     INTO v_desvio
-    FROM matricula_aluno ma
+    FROM public.matricula_aluno ma
     WHERE ma.disciplina_id = p_disciplina_id
       AND ma.nota1 IS NOT NULL
       AND ma.nota2 IS NOT NULL;
@@ -97,7 +97,7 @@ Exemplo: SELECT fn_desvio_padrao_notas(1);';
 CREATE OR REPLACE FUNCTION fn_taxa_aprovacao_disciplina(p_disciplina_id BIGINT)
 RETURNS NUMERIC(5,2)
 LANGUAGE plpgsql
-STABLE
+STABLE SET search_path TO public
 AS $$
 DECLARE
     v_total INTEGER;
@@ -108,7 +108,7 @@ BEGIN
         COUNT(*),
         COUNT(CASE WHEN status = 'APROVADO' THEN 1 END)
     INTO v_total, v_aprovados
-    FROM matricula_aluno
+    FROM public.matricula_aluno
     WHERE disciplina_id = p_disciplina_id
       AND status IN ('APROVADO', 'REPROVADO');
 
@@ -135,14 +135,14 @@ Exemplo: SELECT fn_taxa_aprovacao_disciplina(1);';
 CREATE OR REPLACE FUNCTION fn_contar_por_status(p_aluno_id BIGINT, p_status VARCHAR)
 RETURNS INTEGER
 LANGUAGE plpgsql
-STABLE
+STABLE SET search_path TO public
 AS $$
 DECLARE
     v_count INTEGER;
 BEGIN
     SELECT COUNT(*)
     INTO v_count
-    FROM matricula_aluno
+    FROM public.matricula_aluno
     WHERE aluno_id = p_aluno_id
       AND status = p_status;
 
@@ -175,7 +175,7 @@ COMMENT ON FUNCTION fn_contar_por_status(BIGINT, VARCHAR) IS
 CREATE OR REPLACE FUNCTION fn_score_risco_aluno(p_aluno_id BIGINT)
 RETURNS NUMERIC(5,2)
 LANGUAGE plpgsql
-STABLE
+STABLE SET search_path TO public
 AS $$
 DECLARE
     v_total_matriculas INTEGER;
@@ -201,7 +201,7 @@ DECLARE
 BEGIN
     -- ─── Obter contadores ─────────────────────────────────────────
     SELECT COUNT(*) INTO v_total_matriculas
-    FROM matricula_aluno WHERE aluno_id = p_aluno_id;
+    FROM public.matricula_aluno WHERE aluno_id = p_aluno_id;
 
     -- Se não há matrículas, não há dados para calcular risco
     IF v_total_matriculas = 0 THEN
@@ -215,7 +215,7 @@ BEGIN
     -- Média geral de todos os alunos do sistema (referência)
     SELECT ROUND(AVG((nota1 + nota2) / 2.0)::NUMERIC, 2)
     INTO v_media_geral_sistema
-    FROM matricula_aluno
+    FROM public.matricula_aluno
     WHERE nota1 IS NOT NULL AND nota2 IS NOT NULL;
 
     -- ─── Calcular percentuais ─────────────────────────────────────
@@ -336,7 +336,7 @@ SELECT
     -- Timestamp de quando esta MV foi atualizada
     CURRENT_TIMESTAMP                                           AS data_atualizacao
 
-FROM aluno a
+FROM public.aluno a
 LEFT JOIN matricula_aluno ma ON ma.aluno_id = a.id
 GROUP BY a.id, a.nome_completo, a.email;
 
@@ -390,7 +390,7 @@ SELECT
 
     CURRENT_TIMESTAMP                                           AS data_atualizacao
 
-FROM disciplina d
+FROM public.disciplina d
 LEFT JOIN professor p        ON p.id = d.professor_id
 LEFT JOIN matricula_aluno ma ON ma.disciplina_id = d.id
 GROUP BY d.id, d.nome, d.carga_horaria, p.nome;
@@ -428,13 +428,13 @@ SELECT
     fn_classificar_risco(fn_score_risco_aluno(a.id)) AS classificacao_risco,
 
     -- Total de matrículas (para contexto)
-    (SELECT COUNT(*) FROM matricula_aluno WHERE aluno_id = a.id) AS total_matriculas,
+    (SELECT COUNT(*) FROM public.matricula_aluno WHERE aluno_id = a.id) AS total_matriculas,
 
     CURRENT_TIMESTAMP                           AS data_atualizacao
 
-FROM aluno a
+FROM public.aluno a
 -- Apenas incluir alunos que têm pelo menos uma matrícula
-WHERE EXISTS (SELECT 1 FROM matricula_aluno WHERE aluno_id = a.id)
+WHERE EXISTS (SELECT 1 FROM public.matricula_aluno WHERE aluno_id = a.id)
 -- Ordenar pelo score de risco (mais altos primeiro)
 ORDER BY fn_score_risco_aluno(a.id) DESC;
 
@@ -519,7 +519,7 @@ BEGIN
     FOR rec IN
         SELECT id, nota1, nota2,
                ROUND(((nota1 + nota2) / 2.0)::NUMERIC, 2) AS media
-        FROM matricula_aluno
+        FROM public.matricula_aluno
         WHERE status = 'MATRICULADO'
           AND nota1 IS NOT NULL
           AND nota2 IS NOT NULL
